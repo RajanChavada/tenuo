@@ -193,6 +193,7 @@ pnpm example:mcp          # quarterly-close wire scenario
 pnpm example:mcp:host     # official MCP v1 recipe
 pnpm example:mcp:adapter  # @tenuo/mcp v2 adapter tests
 pnpm example:mcp:v2       # minimal @tenuo/mcp v2 client/server example
+pnpm example:sessions     # concurrent session isolation
 ```
 
 ### TypeScript contribution rules

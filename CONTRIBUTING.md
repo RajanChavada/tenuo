@@ -186,7 +186,7 @@ paths inside a map point at files consumers never receive. Declaration maps
 and shipping `src` just to serve editor navigation would also ship build
 inputs. Editors fall back to the published `.d.ts` files.
 
-### Run the MCP scenarios
+### Run the examples
 
 ```bash
 pnpm example:mcp          # quarterly-close wire scenario

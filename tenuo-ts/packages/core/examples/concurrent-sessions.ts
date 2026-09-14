@@ -20,7 +20,25 @@
  * `{ session }`. `runQueuedJobs()` demonstrates this with an unbound queue;
  * context-aware queues can propagate context themselves.
  *
- * Driven by `test/session-isolation.test.ts`. Run: `pnpm example:sessions`.
+ * `runConcurrentSessionsExample()` runs both scenarios and prints what each
+ * call was allowed or denied. `test/example-sessions.test.ts` drives it;
+ * `test/session-isolation.test.ts` asserts the isolation criteria against the
+ * same helpers.
+ *
+ * From `tenuo-ts`: `pnpm example:sessions`
+ *
+ * Expected output:
+ *
+ * ```text
+ * allowed  reports /data/reports/q3.pdf -> contents:/data/reports/q3.pdf
+ * denied   reports /data/finance/ledger.csv -> TENUO_CONSTRAINT_VIOLATION (field path)
+ * allowed  finance /data/finance/ledger.csv -> contents:/data/finance/ledger.csv
+ * denied   finance /data/reports/q3.pdf -> TENUO_CONSTRAINT_VIOLATION (field path)
+ * interleaved: reports: read own | finance: read own | reports: try other | finance: try other | reports: read own again | finance: read own again
+ * tool executed for: ["/data/reports/q3.pdf","/data/finance/ledger.csv","/data/reports/q3.pdf","/data/finance/ledger.csv"]
+ * denied   queued job without { session } -> TENUO_CONFIGURATION (TenuoConfigurationError)
+ * allowed  queued job with { session } -> contents:/data/reports/q3.pdf
+ * ```
  */
 import {
   AuthorizationDeniedError,
@@ -85,6 +103,12 @@ export type QueuedRun = {
   readonly ambient: JobOutcome;
   /** Outcome of the same job with `{ session }` passed on the call. */
   readonly explicit: JobOutcome;
+};
+
+/** Everything `runConcurrentSessionsExample()` produced, one field per scenario. */
+export type ExampleRun = {
+  readonly concurrent: ConcurrentRun;
+  readonly queued: QueuedRun;
 };
 
 type ReadFile = {
@@ -276,4 +300,40 @@ export async function runQueuedJobs(harness: Harness): Promise<QueuedRun> {
     job().then((value): JobOutcome => ({ ok: true, value }), failure);
   const [ambient, explicit] = await Promise.all([run(queued.ambient), run(queued.explicit)]);
   return { ambient, explicit };
+}
+
+/** A denial reports its stable code and field. "allowed" would mean isolation failed. */
+function describeCrossed(crossed: FlowResult["crossed"]): string {
+  return crossed === "allowed" ? "allowed" : `${crossed.code} (field ${String(crossed.field)})`;
+}
+
+/** A queued job reports its value, or the configuration error that stopped it. */
+function describeJob(job: JobOutcome): string {
+  return job.ok ? job.value : `${String(job.code)} (${job.name})`;
+}
+
+/**
+ * The runnable entry point: both scenarios, with every outcome printed.
+ *
+ * Each scenario gets its own harness so the `executed` list it reports covers
+ * that scenario alone. `log` is injected rather than calling `console.log`
+ * directly, so the regression test drives the same code path while staying
+ * quiet under `pnpm test`.
+ */
+export async function runConcurrentSessionsExample(
+  log: (line: string) => void = console.log,
+): Promise<ExampleRun> {
+  const concurrent = await runConcurrentFlows(createHarness());
+  for (const result of concurrent.results) {
+    log(`allowed  ${result.name} ${PATHS[result.name]} -> ${result.own}`);
+    log(`denied   ${result.name} ${PATHS[OTHER[result.name]]} -> ${describeCrossed(result.crossed)}`);
+  }
+  log(`interleaved: ${concurrent.log.join(" | ")}`);
+  log(`tool executed for: ${JSON.stringify(concurrent.executed)}`);
+
+  const queued = await runQueuedJobs(createHarness());
+  log(`denied   queued job without { session } -> ${describeJob(queued.ambient)}`);
+  log(`allowed  queued job with { session } -> ${describeJob(queued.explicit)}`);
+
+  return { concurrent, queued };
 }

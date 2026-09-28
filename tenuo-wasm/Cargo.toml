@@ -7,7 +7,7 @@ description = "WebAssembly bindings for Tenuo, task-scoped authorization for AI 
 homepage = "https://tenuo.ai"
 repository = "https://github.com/tenuo-ai/tenuo"
 license = "Apache-2.0"
-license-file = "../LICENSE"
+license-file = "LICENSE"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

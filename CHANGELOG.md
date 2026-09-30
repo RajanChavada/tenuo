@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Holder signing, approval hashes, and receipt chains in the Rust SDK**
+  (#751):
+  - `PresentedAuthority::prove` and `mcp_meta::sign_meta`: the holder side of
+    the proof path, so a caller can build `_meta.tenuo` without a local
+    `Guard`. `sign_meta` takes the enforcement point's proof timestamp and
+    window. `TransportError::ProofFailed` is new.
+  - `ApprovalRequest::matches` checks request-hash consistency;
+    `matches_warrant` also checks display metadata against a trusted warrant
+    before human review. `sdk::approve_request` takes that warrant and rechecks
+    the reviewed request, including its message, approvers, threshold, and expiry.
+    An empty approver list is refused. The nonce is random and expiry is
+    capped at the warrant's. `ApprovalError::RequestMismatch` is new.
+  - `receipt::verify_chain`: verify signatures, a single signer, and
+    `prev_receipt_hash` links across a non-empty run of receipts.
+
 - **Linux aarch64 Python wheel.** Releases publish a `manylinux_2_28_aarch64`
   wheel next to the existing Linux x86_64, macOS arm64, and Windows wheels, so
   `pip install tenuo` on ARM Linux no longer builds from source. Linux wheels
@@ -31,6 +46,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   clean arguments unchanged.
 
 - Python `verify_receipt` checks a signed receipt without importing the Rust extension directly.
+
+### Changed
+
+- **Guards no longer log denials by default** (#751). `DenialReporting` now
+  defaults to `Debug`, which writes nothing; the caller receives every
+  `Denial`. `Guard::builder`, `Runtime::builder`, `Tenuo::local`, and
+  `Tenuo::enforcement` use that default. The previous default, `Error`,
+  printed each denial message to stderr, and messages can quote argument
+  values. Set `.denial_reporting(DenialReporting::Error)` to restore it.
 
 ### Fixed
 

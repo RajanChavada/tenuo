@@ -1,22 +1,21 @@
 import { setTimeout as yieldToOtherJobs } from "node:timers/promises";
-import { createTenuo, under } from "@tenuo/core";
+import { createTenuo, under, type PublicKeyHandle } from "@tenuo/core";
 import type { Job } from "bullmq";
 
-export type ArchiveJobData = { tenantId: string; path: string };
+/** `warrant` is signed by the producer and bound to this worker's key. */
+export type ArchiveJobData = { warrant: readonly string[]; path: string };
 
 /**
- * One worker process. The tool ceiling is fixed at startup; the session that
- * actually authorizes a call is minted per job and discarded with it.
+ * One worker process. The tool ceiling is fixed at startup; the authority for
+ * each call is the warrant the job carries, verified against the producer's key.
  */
-export function createArchiveWorker() {
-  const tenuo = createTenuo({ root: createTenuo.devRoot() });
+export function createArchiveWorker(options: { rootPublicKey: PublicKeyHandle; holderKey: Uint8Array }) {
+  const tenuo = createTenuo({ trustedRoots: [options.rootPublicKey] });
   const archived: string[] = [];
 
   const archiveDocument = tenuo.tool(
     {
       execute: async ({ path }: { path: string }) => {
-        // Stands in for the archive write. Concurrent jobs overlap here.
-        await yieldToOtherJobs(0);
         archived.push(path);
         return `archived ${path}`;
       },
@@ -25,11 +24,14 @@ export function createArchiveWorker() {
   );
 
   async function process(job: Job<ArchiveJobData>): Promise<string> {
-    const session = tenuo.session({
-      allow: { archive_document: { path: under(`/tenants/${job.data.tenantId}`) } },
-      ttlSeconds: 60,
+    // Throws for a warrant this worker's trusted root did not sign.
+    const session = tenuo.sessionFromWire({ warrant: job.data.warrant, holderKey: options.holderKey });
+    return tenuo.withSession(session, async () => {
+      // Stands in for loading the document. Concurrent jobs interleave here,
+      // each inside its own session, before the call is authorized.
+      await yieldToOtherJobs(0);
+      return archiveDocument.execute({ path: job.data.path });
     });
-    return tenuo.withSession(session, () => archiveDocument.execute({ path: job.data.path }));
   }
 
   return { process, archived };

@@ -1,10 +1,13 @@
+import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
   copyFileSync,
   cpSync,
   existsSync,
+  lstatSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -33,6 +36,7 @@ try {
   writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
 
   runNpm(["install", "--no-audit", "--no-fund"], installDir);
+  assertPackedInstall(installDir);
   runNpm(["run", "typecheck"], installDir);
   runNpm(["test"], installDir);
 
@@ -71,4 +75,23 @@ function packPackage(cwd, destination) {
     throw new Error("npm pack did not print a tarball path");
   }
   return isAbsolute(packed) ? packed : join(destination, packed);
+}
+
+function assertPackedInstall(root) {
+  const packageDir = join(root, "node_modules", "@tenuo", "core");
+  assert.equal(
+    lstatSync(packageDir).isSymbolicLink(),
+    false,
+    "@tenuo/core must not be a workspace symlink",
+  );
+  assert.equal(
+    realpathSync(packageDir).startsWith(realpathSync(root)),
+    true,
+    "@tenuo/core must be installed inside the isolated example",
+  );
+  assert.equal(
+    existsSync(join(packageDir, "dist", "generated", "tenuo_wasm_bg.wasm")),
+    true,
+    "the packed @tenuo/core must contain its generated WASM asset",
+  );
 }

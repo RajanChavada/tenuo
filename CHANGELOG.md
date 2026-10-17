@@ -92,6 +92,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `TemporalConstraintViolation`, which the plugin registers as a workflow
   failure, so anyone who could signal the workflow could end the run. The
   signal is now logged and dropped and the run continues.
+- **A dropped Temporal signal is now audited.** It emits one DENY
+  `TemporalAuditEvent` (`tool="signal:<name>"`) and increments the denied
+  metric. Neither is emitted again on replay, and a raising callback or metric
+  does not change the drop.
 - **`ControlPlaneClient.shutdown()` no longer panics.** It built its Tokio
   timer outside the runtime, so every call from Python, including the
   `atexit` hook that runs on every exit with a connected client, printed
